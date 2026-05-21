@@ -48,6 +48,7 @@ You'll need free API keys from each provider:
 
 1. **Pexels** 📷 - Get your key at [pexels.com/api](https://www.pexels.com/api/)
 2. **Unsplash** 🌅 - Sign up at [unsplash.com/developers](https://unsplash.com/developers)
+3. **Pixabay** 🖼️ - Get your key at [pixabay.com/api/docs](https://pixabay.com/api/docs/)
 
 
 ### API Key Configuration
@@ -71,7 +72,7 @@ Add Stocky to your MCP client configuration:
       "env": {
         "PEXELS_API_KEY": "your_pexels_key",
         "UNSPLASH_ACCESS_KEY": "your_unsplash_key",
-
+        "PIXABAY_API_KEY": "your_pixabay_key"
       }
     }
   }
@@ -86,6 +87,7 @@ This repo also exposes a no-auth Streamable HTTP MCP server for Vercel.
 ```bash
 PEXELS_API_KEY=your_pexels_key
 UNSPLASH_ACCESS_KEY=your_unsplash_key
+PIXABAY_API_KEY=your_pixabay_key
 ```
 
 2. Deploy the repo to Vercel.
@@ -117,7 +119,7 @@ Search specific providers:
 ```python
 results = await search_stock_images(
     query="mountain landscape",
-    providers=["pexels", "unsplash"],
+    providers=["pexels", "unsplash", "pixabay"],
     per_page=30,
     page=1
 )
@@ -154,7 +156,7 @@ Search for royalty-free stock images across multiple providers.
 
 **Parameters:**
 - `query` (str, required) - Search terms for finding images
-- `providers` (list, optional) - List of providers to search: `["pexels", "unsplash"]`
+- `providers` (list, optional) - List of providers to search: `["pexels", "unsplash", "pixabay"]`
 - `per_page` (int, optional) - Results per page, max 50 (default: 20)
 - `page` (int, optional) - Page number for pagination (default: 1)
 - `sort_by` (str, optional) - Sort results by "relevance" or "newest"
@@ -194,6 +196,7 @@ All images returned by Stocky are free to use:
 
 - **Pexels** ✅ - Free for commercial and personal use, no attribution required
 - **Unsplash** ✅ - Free under the Unsplash License
+- **Pixabay** ✅ - Free under the Pixabay Content License
 
 
 Always check the specific license for each image before use in production.
@@ -210,7 +213,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## 🙏 Acknowledgments
 
-- Thanks to [Pexels](https://www.pexels.com) and [Unsplash](https://unsplash.com) for providing free APIs
+- Thanks to [Pexels](https://www.pexels.com), [Unsplash](https://unsplash.com), and [Pixabay](https://pixabay.com) for providing free APIs
 - Built with the [Model Context Protocol](https://github.com/modelcontextprotocol)
 - Created with ❤️ for the developer community
 

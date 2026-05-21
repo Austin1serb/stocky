@@ -3,7 +3,8 @@
 Stocky MCP Server - A friendly MCP server for searching royalty-free stock
 images.
 
-This server provides tools to search for stock images from Pexels and Unsplash.
+This server provides tools to search for stock images from Pexels, Unsplash,
+and Pixabay.
 """
 import logging
 import os
@@ -21,6 +22,7 @@ import json
 
 try:
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.transport_security import TransportSecuritySettings
 except ImportError:
     print("Error: MCP package not found. Please install it with: "
           "pip install mcp")
@@ -397,6 +399,137 @@ class UnsplashProvider(StockImageProvider):
             return None
 
 
+class PixabayProvider(StockImageProvider):
+    """Provider for Pixabay image search API."""
+
+    BASE_URL = "https://pixabay.com/api/"
+
+    def __init__(self, api_key: str):
+        """Initialize Pixabay provider with API key."""
+        if not api_key:
+            raise ValueError(
+                "Pixabay API key is missing!\n"
+                "Please set the PIXABAY_API_KEY environment variable.\n"
+                "You can get a free API key at: https://pixabay.com/api/docs/"
+            )
+        super().__init__(api_key)
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        self.session = True
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        self.session = None
+
+    async def search(self, query: str, per_page: int = 20, page: int = 1,
+                     **kwargs) -> List[ImageResult]:
+        """Search Pixabay for images."""
+        if not self.session:
+            raise RuntimeError(
+                "Provider must be used within async context manager"
+            )
+
+        sort = kwargs.get("sort", "relevant")
+        order = "latest" if sort in ("newest", "latest") else "popular"
+        params = {
+            "key": self.api_key,
+            "q": query,
+            "image_type": "photo",
+            "safesearch": "true",
+            "page": page,
+            "per_page": per_page,
+            "order": order,
+        }
+
+        try:
+            data = self._request(params)
+        except (pycurl.error, json.JSONDecodeError) as e:
+            logger.error(f"Pixabay API error: {e}")
+            return []
+
+        return [
+            self._image_result(hit)
+            for hit in data.get("hits", [])
+        ]
+
+    async def get_details(self, image_id: str) -> Optional[ImageResult]:
+        """Get details for a specific Pixabay image."""
+        if not self.session:
+            raise RuntimeError(
+                "Provider must be used within async context manager"
+            )
+
+        pixabay_id = image_id.replace("pixabay_", "")
+        params = {
+            "key": self.api_key,
+            "id": pixabay_id,
+            "image_type": "photo",
+            "safesearch": "true",
+        }
+
+        try:
+            data = self._request(params)
+        except (pycurl.error, json.JSONDecodeError) as e:
+            logger.error(f"Pixabay API error: {e}")
+            return None
+
+        hits = data.get("hits", [])
+        if not hits:
+            return None
+        return self._image_result(hits[0])
+
+    def _request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Make a Pixabay API request and parse the JSON response."""
+        buffer = io.BytesIO()
+        c = pycurl.Curl()
+        query_string = urllib.parse.urlencode(params)
+        c.setopt(pycurl.URL, f"{self.BASE_URL}?{query_string}")
+        c.setopt(pycurl.WRITEDATA, buffer)
+        c.perform()
+
+        status_code = c.getinfo(pycurl.HTTP_CODE)
+        c.close()
+
+        if status_code != 200:
+            logger.error(f"Pixabay API error: HTTP status {status_code}")
+            return {"hits": []}
+
+        response_data = buffer.getvalue().decode("utf-8")
+        return json.loads(response_data)
+
+    def _image_result(self, photo: Dict[str, Any]) -> ImageResult:
+        """Convert a Pixabay API hit to Stocky's normalized image result."""
+        tags = [
+            tag.strip()
+            for tag in photo.get("tags", "").split(",")
+            if tag.strip()
+        ]
+        user = photo.get("user", "Pixabay contributor")
+        user_id = photo.get("user_id")
+        photographer_url = (
+            f"https://pixabay.com/users/{user}-{user_id}/"
+            if user_id else None
+        )
+
+        return ImageResult(
+            id=f"pixabay_{photo['id']}",
+            title=tags[0] if tags else f"Photo by {user}",
+            description=photo.get("tags", ""),
+            url=photo.get("largeImageURL") or photo.get("webformatURL", ""),
+            thumbnail=photo.get("previewURL", ""),
+            width=photo.get("imageWidth") or photo.get("webformatWidth", 0),
+            height=photo.get("imageHeight") or photo.get("webformatHeight", 0),
+            photographer=user,
+            photographer_url=photographer_url,
+            source="Pixabay",
+            license="Free to use under Pixabay Content License",
+            attribution_url=photo.get("pageURL"),
+            tags=tags
+        )
+
+
 class StockImageManager:
     """Manages multiple stock image providers and handles searches."""
 
@@ -419,6 +552,11 @@ class StockImageManager:
         unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
         if unsplash_key:
             self.providers["unsplash"] = UnsplashProvider(unsplash_key)
+
+        # Initialize Pixabay if API key is available
+        pixabay_key = os.getenv("PIXABAY_API_KEY")
+        if pixabay_key:
+            self.providers["pixabay"] = PixabayProvider(pixabay_key)
 
     async def search(self, query: str, providers: Optional[List[str]] = None,
                      per_page: int = 20, page: int = 1, sort: str = "relevant",
@@ -448,7 +586,8 @@ class StockImageManager:
                 "No image providers are configured. "
                 "Please set at least one API key:\n"
                 "- PEXELS_API_KEY for Pexels\n"
-                "- UNSPLASH_ACCESS_KEY for Unsplash"
+                "- UNSPLASH_ACCESS_KEY for Unsplash\n"
+                "- PIXABAY_API_KEY for Pixabay"
             )
             return {"error": error_msg}
 
@@ -479,7 +618,7 @@ class StockImageManager:
                 provider = self.providers[provider_name]
                 async with provider:
                     provider_results = await provider.search(
-                        query, per_page, page
+                        query, per_page, page, sort=sort
                     )
 
                     # If attribution is disabled, set attribution_url
@@ -515,7 +654,7 @@ class StockImageManager:
         """
         # Extract provider from ID
         provider_name = None
-        for prefix in ["pexels_", "unsplash_"]:
+        for prefix in ["pexels_", "unsplash_", "pixabay_"]:
             if image_id.startswith(prefix):
                 provider_name = prefix.rstrip("_")
 
@@ -609,6 +748,13 @@ class StockImageManager:
             else:  # original
                 # For Unsplash, the full URL is already in the details
                 image_url = image_details.get("url")
+        elif "pixabay_" in image_id:
+            # Map size to Pixabay URL. Full-resolution fields require
+            # Pixabay account approval, so use the public result URLs.
+            if size in ("thumbnail", "small"):
+                image_url = image_details.get("thumbnail")
+            else:
+                image_url = image_details.get("url")
 
         if not image_url:
             return {"error": "Could not determine image URL for download"}
@@ -687,8 +833,26 @@ class StockImageManager:
 class StockyServer:
     """Main MCP server for stock image searching."""
 
-    def __init__(self, *, stateless_http: bool = False):
-        self.mcp = FastMCP("stocky", stateless_http=stateless_http)
+    def __init__(
+        self,
+        *,
+        stateless_http: bool = False,
+        allowed_hosts: Optional[List[str]] = None,
+        allowed_origins: Optional[List[str]] = None,
+    ):
+        transport_security = None
+        if allowed_hosts is not None or allowed_origins is not None:
+            transport_security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=True,
+                allowed_hosts=allowed_hosts or [],
+                allowed_origins=allowed_origins or [],
+            )
+
+        self.mcp = FastMCP(
+            "stocky",
+            stateless_http=stateless_http,
+            transport_security=transport_security,
+        )
         self.manager = StockImageManager()
         self._setup_tools()
         self._setup_resources()
@@ -811,7 +975,7 @@ Search for stock images across multiple providers.
 Parameters:
 - query (required): Your search terms
 - providers (optional): List of providers to search
-  ["pexels", "unsplash"]
+  ["pexels", "unsplash", "pixabay"]
 - per_page (optional): Results per page (max 50)
 - page (optional): Page number for pagination
 - sort_by (optional): Sort results by 'relevance' or 'newest'
@@ -860,21 +1024,22 @@ download_image("pexels_123456", size="medium", output_path="/path/to/save.jpg")
    - API Key: UNSPLASH_ACCESS_KEY
    - License: Unsplash License
 
-
-   - License: Free for commercial use, no attribution required
+3. **Pixabay** - Royalty-free stock photos
+   - API Key: PIXABAY_API_KEY
+   - License: Pixabay Content License
 
 ## Setup
 
 1. Get API keys from:
    - Pexels: https://www.pexels.com/api/
    - Unsplash: https://unsplash.com/developers
-
+   - Pixabay: https://pixabay.com/api/docs/
 
 2. Set environment variables:
    ```bash
    export PEXELS_API_KEY="your_key"
    export UNSPLASH_ACCESS_KEY="your_key"
-
+   export PIXABAY_API_KEY="your_key"
    ```
 
 3. Run the server:

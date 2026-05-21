@@ -17,7 +17,12 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from stocky_mcp import PexelsProvider, UnsplashProvider, ImageResult
+    from stocky_mcp import (
+        PexelsProvider,
+        PixabayProvider,
+        UnsplashProvider,
+        ImageResult,
+    )
 except ImportError:
     print("Error: Could not import stocky_mcp. Make sure it's in the same directory.")
     sys.exit(1)
@@ -41,6 +46,10 @@ class StockyDemo:
             # We know unsplash_key is not None here due to the if check
             self.providers["unsplash"] = lambda: UnsplashProvider(unsplash_key or "")
 
+        pixabay_key = os.getenv("PIXABAY_API_KEY")
+        if pixabay_key:
+            # We know pixabay_key is not None here due to the if check
+            self.providers["pixabay"] = lambda: PixabayProvider(pixabay_key or "")
 
 
     def print_header(self, text: str):

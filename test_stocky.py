@@ -5,6 +5,7 @@
 
 from stocky_mcp import (
     PexelsProvider,
+    PixabayProvider,
     UnsplashProvider,
 )
 import os
@@ -172,6 +173,52 @@ class StockyTests:
                 "Unsplash API connection", False, f"Unexpected error: {str(e)}"
             )
 
+    async def test_pixabay_connection(self) -> None:
+        """Test connection to Pixabay API when configured."""
+        print("\n🖼️ Testing Pixabay API...")
+
+        pixabay_key = os.getenv("PIXABAY_API_KEY")
+        if not pixabay_key:
+            self.add_result(
+                "Pixabay API connection",
+                True,
+                "API key not configured; optional provider skipped")
+            return
+
+        try:
+            async with PixabayProvider(pixabay_key) as provider:
+                results = await provider.search("nature", per_page=3)
+                if results:
+                    self.add_result(
+                        "Pixabay API connection",
+                        True,
+                        f"Found {len(results)} result(s)")
+
+                    provider_id = results[0].id.split("_", 1)[1]
+                    details = await provider.get_details(provider_id)
+                    if details:
+                        self.add_result(
+                            "Pixabay get_details",
+                            True,
+                            "Successfully retrieved image details"
+                        )
+                    else:
+                        self.add_result(
+                            "Pixabay get_details",
+                            False,
+                            "Could not retrieve image details"
+                        )
+                else:
+                    self.add_result(
+                        "Pixabay API connection", False, "No results found"
+                    )
+        except ValueError as e:
+            self.add_result("Pixabay API connection", False, str(e))
+        except Exception as e:
+            self.add_result(
+                "Pixabay API connection", False, f"Unexpected error: {str(e)}"
+            )
+
     async def test_search_functionality(self) -> None:
         """Test search functionality across all providers."""
         print("\n🔍 Testing Search Functionality...")
@@ -180,12 +227,15 @@ class StockyTests:
         providers_to_test = []
         pexels_key = os.getenv("PEXELS_API_KEY")
         unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
+        pixabay_key = os.getenv("PIXABAY_API_KEY")
 
         if pexels_key:
             providers_to_test.append(("Pexels", PexelsProvider, pexels_key))
         if unsplash_key:
             providers_to_test.append(
                 ("Unsplash", UnsplashProvider, unsplash_key))
+        if pixabay_key:
+            providers_to_test.append(("Pixabay", PixabayProvider, pixabay_key))
 
         test_queries = [
             "nature landscape",
@@ -282,6 +332,7 @@ class StockyTests:
         await self.test_env_vars()
         await self.test_pexels_connection()
         await self.test_unsplash_connection()
+        await self.test_pixabay_connection()
         await self.test_search_functionality()
         await self.test_error_handling()
 
