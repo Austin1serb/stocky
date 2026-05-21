@@ -687,8 +687,8 @@ class StockImageManager:
 class StockyServer:
     """Main MCP server for stock image searching."""
 
-    def __init__(self):
-        self.mcp = FastMCP("stocky")
+    def __init__(self, *, stateless_http: bool = False):
+        self.mcp = FastMCP("stocky", stateless_http=stateless_http)
         self.manager = StockImageManager()
         self._setup_tools()
         self._setup_resources()

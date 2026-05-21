@@ -78,6 +78,27 @@ Add Stocky to your MCP client configuration:
 }
 ```
 
+## Deploying on Vercel
+
+This repo also exposes a no-auth Streamable HTTP MCP server for Vercel.
+
+1. Set these Vercel environment variables:
+```bash
+PEXELS_API_KEY=your_pexels_key
+UNSPLASH_ACCESS_KEY=your_unsplash_key
+```
+
+2. Deploy the repo to Vercel.
+
+3. Connect MCP clients to:
+```text
+https://your-project.vercel.app/mcp
+```
+
+The root URL returns a small health response. The `/mcp` route is the MCP
+endpoint. Because this deployment has no auth, anyone with the URL can use the
+server and spend requests against your provider API keys.
+
 ## 📖 Usage Examples
 
 <div align="center">
